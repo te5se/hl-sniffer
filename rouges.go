@@ -5,8 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"time"
 
 	"github.com/go-toast/toast"
+	"github.com/hajimehoshi/go-mp3"
+	"github.com/hajimehoshi/oto/v2"
 )
 
 type RogueArea struct {
@@ -20,6 +24,7 @@ type RogueArea struct {
 var rogueAreas = []RogueArea{
 	RogueArea{Left: 231, Top: 130, Right: 240, Bottom: 140, Description: "Below puri tulang"},
 	RogueArea{Left: 169, Top: 177, Right: 184, Bottom: 272, Description: "Left from cartref"},
+	RogueArea{Left: 191, Top: 266, Right: 210, Bottom: 276, Description: "Right from cartref"},
 	RogueArea{Left: 198, Top: 95, Right: 209, Bottom: 105, Description: "Top dark"},
 	RogueArea{Left: 84, Top: 170, Right: 108, Bottom: 181, Description: "Top neutrals"},
 	RogueArea{Left: 97, Top: 187, Right: 111, Bottom: 200, Description: "Bottom neutrals"},
@@ -65,7 +70,7 @@ func ProcessRouges(body []byte) {
 			notification := toast.Notification{
 				AppID:   "Microsoft.Windows.Shell.RunDialog",
 				Title:   "title",
-				Message: fmt.Sprintf("Rogue hero at %v:%v, %v", person.X, person.Y, descriptionArea),
+				Message: msg,
 				Icon:    "C:\\path\\to\\your\\logo.png", // The file must exist
 				Actions: []toast.Action{},
 			}
@@ -73,8 +78,42 @@ func ProcessRouges(body []byte) {
 			if err != nil {
 				log.Fatalln(err)
 			}
+			play()
 
-			fmt.Printf("Rogue hero at %v:%v", person.X, person.Y)
+			fmt.Println(msg)
 		}
 	}
+}
+
+func play() error {
+	f, err := os.Open("beep.mp3")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	d, err := mp3.NewDecoder(f)
+	if err != nil {
+		return err
+	}
+
+	c, ready, err := oto.NewContext(d.SampleRate(), 2, 2)
+	if err != nil {
+		return err
+	}
+	<-ready
+
+	p := c.NewPlayer(d)
+	defer p.Close()
+	p.Play()
+
+	fmt.Printf("Length: %d[bytes]\n", d.Length())
+	for {
+		time.Sleep(time.Second)
+		if !p.IsPlaying() {
+			break
+		}
+	}
+
+	return nil
 }
