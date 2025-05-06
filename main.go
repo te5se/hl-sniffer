@@ -1,111 +1,19 @@
 package main
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcap"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	_ = godotenv.Load(".env")
 
-	devices, err := pcap.FindAllDevs()
-	if err != nil {
-		panic(err)
-	}
+	userRepo := NewUserRepo()
+	tgService := NewTGService(userRepo)
 
-	device := devices[0].Name
+	go NewSniffer(tgService).Listen()
+	go tgService.Run()
 
-	for _, deviceLocal := range devices {
-		if deviceLocal.Description == "Qualcomm Atheros QCA9377 Wireless Network Adapter" {
-			device = deviceLocal.Name
-		}
-	}
-
-	handle, err := pcap.OpenLive(device, 65536, true, pcap.BlockForever)
-	if err != nil {
-		panic(err)
-	}
-
-	defer handle.Close()
-
-	fmt.Printf("Listening on interface %s...\n", device)
-
-	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-
-	buffer := []byte{}
-
-	for packet := range packetSource.Packets() {
-		ipv4Layer := packet.Layer(layers.LayerTypeIPv4)
-
-		if ipv4Layer == nil {
-			continue
-		}
-
-		ipv4 := ipv4Layer.(*layers.IPv4)
-
-		if ipv4.SrcIP.String() != "176.9.0.5" {
-			continue
-		}
-		if packet.ApplicationLayer() == nil {
-			continue
-		}
-
-		payload := string(packet.ApplicationLayer().Payload())
-
-		/* if strings.Contains(payload, "Content-Type: application/json") == false {
-			continue
-		} */
-		/* if strings.Contains(payload, "Content-Length") == false {
-			continue
-		}
-		*/
-
-		if strings.Contains(payload, "HTTP") {
-			/* fmt.Println("------------")
-			fmt.Println(string(buffer)) */
-
-			split := strings.Split(string(buffer), "\n")
-
-			body := []byte{}
-
-			chunked := strings.Contains(string(buffer), "Transfer-Encoding: chunked")
-
-			for i := len(split) - 1; i != 0; i-- {
-				line := split[i]
-
-				line = strings.Trim(line, "\n")
-				line = strings.Trim(line, "\r")
-
-				intValue, err := strconv.Atoi(line)
-				if err == nil && intValue < 10000 {
-					continue
-				}
-
-				if chunked && strings.Contains(line, "e68") && len(line) < 10 {
-					break
-				}
-				if !chunked && line == "" {
-					break
-				}
-
-				body = append([]byte(line), body...)
-			}
-
-			ProcessRouges(body)
-
-			buffer = []byte{}
-		} else {
-
-		}
-
-		buffer = append(buffer, []byte(payload)...)
-
-	}
-
-	time.Sleep(time.Hour)
+	time.Sleep(time.Hour * 100)
 }

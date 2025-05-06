@@ -4,13 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
-	"os"
 	"time"
-
-	"github.com/go-toast/toast"
-	"github.com/hajimehoshi/go-mp3"
-	"github.com/hajimehoshi/oto/v2"
 )
 
 type RogueArea struct {
@@ -30,7 +24,30 @@ var rogueAreas = []RogueArea{
 	RogueArea{Left: 97, Top: 187, Right: 111, Bottom: 200, Description: "Bottom neutrals"},
 }
 
-func ProcessRouges(body []byte) {
+type CacheLocal struct {
+	Cache map[string]time.Time
+}
+
+var localCache = CacheLocal{
+	Cache: make(map[string]time.Time),
+}
+
+func (c *CacheLocal) ShouldNotify(x int, y int) bool {
+	v, ok := c.Cache[string(x)+string(y)]
+	if !ok {
+		c.Cache[string(x)+string(y)] = time.Now()
+		return true
+	}
+
+	if time.Since(v) > time.Minute {
+		c.Cache[string(x)+string(y)] = time.Now()
+		return true
+	}
+
+	return false
+}
+
+func (s *Sniffer) ProcessRouges(body []byte) {
 	var hlMap HeroeslandMap
 
 	if !bytes.Contains(body, []byte(`"a":"all"`)) {
@@ -54,6 +71,11 @@ func ProcessRouges(body []byte) {
 		isInBoat := person.Tw == 1
 
 		isInRogueArea := false
+
+		isOverlord := person.Tid == 1338
+
+		isDragon := person.Tid == 1554
+
 		descriptionArea := ""
 		for _, rogueArea := range rogueAreas {
 			isRogueAreaLocal := person.X >= rogueArea.Left && person.X <= rogueArea.Right && person.Y >= rogueArea.Top && person.Y <= rogueArea.Bottom
@@ -65,55 +87,75 @@ func ProcessRouges(body []byte) {
 			}
 		}
 
-		if isHero && !isRealPerson && !isInBoat && isInRogueArea {
-			/* play() */
-			notification := toast.Notification{
+		if isHero && !isRealPerson && !isInBoat && isInRogueArea && localCache.ShouldNotify(person.X, person.Y) {
+			notifyMsg := fmt.Sprintf("Rogue hero at %v:%v, %v", person.X, person.Y, descriptionArea)
+
+			/* notification := toast.Notification{
 				AppID:   "Microsoft.Windows.Shell.RunDialog",
 				Title:   "title",
-				Message: msg,
+				Message: notifyMsg,
 				Icon:    "C:\\path\\to\\your\\logo.png", // The file must exist
 				Actions: []toast.Action{},
 			}
 			err := notification.Push()
 			if err != nil {
 				log.Fatalln(err)
+			} */
+
+			fmt.Println(notifyMsg)
+
+			err = s.tgService.Notify(notifyMsg)
+			if err != nil {
+				fmt.Println("error", err.Error())
 			}
-			play()
+		}
 
-			fmt.Println(msg)
+		if isHero && !isRealPerson && isOverlord && person.X < 100 && person.Y < 100 && localCache.ShouldNotify(person.X, person.Y) {
+			/* play() */
+			notifyMsg := fmt.Sprint("Mutare is up")
+
+			/* notification := toast.Notification{
+				AppID:   "Microsoft.Windows.Shell.RunDialog",
+				Title:   "title",
+				Message: notifyMsg,
+				Icon:    "C:\\path\\to\\your\\logo.png", // The file must exist
+				Actions: []toast.Action{},
+			}
+			err := notification.Push()
+			if err != nil {
+				log.Fatalln(err)
+			} */
+
+			fmt.Println(notifyMsg)
+
+			err = s.tgService.Notify(notifyMsg)
+			if err != nil {
+				fmt.Println("error", err.Error())
+			}
+		}
+
+		if isDragon && localCache.ShouldNotify(person.X, person.Y) {
+			notifyMsg := fmt.Sprintf("Dragon at at %v:%v", person.X, person.Y)
+
+			/* play() */
+			/* notification := toast.Notification{
+				AppID:   "Microsoft.Windows.Shell.RunDialog",
+				Title:   "title",
+				Message: notifyMsg,
+				Icon:    "C:\\path\\to\\your\\logo.png", // The file must exist
+				Actions: []toast.Action{},
+			}
+			err := notification.Push()
+			if err != nil {
+				log.Fatalln(err)
+			} */
+
+			fmt.Printf(notifyMsg)
+
+			err = s.tgService.Notify(notifyMsg)
+			if err != nil {
+				fmt.Println("error", err.Error())
+			}
 		}
 	}
-}
-
-func play() error {
-	f, err := os.Open("beep.mp3")
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	d, err := mp3.NewDecoder(f)
-	if err != nil {
-		return err
-	}
-
-	c, ready, err := oto.NewContext(d.SampleRate(), 2, 2)
-	if err != nil {
-		return err
-	}
-	<-ready
-
-	p := c.NewPlayer(d)
-	defer p.Close()
-	p.Play()
-
-	fmt.Printf("Length: %d[bytes]\n", d.Length())
-	for {
-		time.Sleep(time.Second)
-		if !p.IsPlaying() {
-			break
-		}
-	}
-
-	return nil
 }
