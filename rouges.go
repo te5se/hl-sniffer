@@ -15,6 +15,10 @@ type RogueArea struct {
 	Description string
 }
 
+func (a RogueArea) IsInside(x, y int) bool {
+	return x >= a.Left && x <= a.Right && y >= a.Top && y <= a.Bottom
+}
+
 var rogueAreas = []RogueArea{
 	RogueArea{Left: 231, Top: 130, Right: 240, Bottom: 140, Description: "Below puri tulang"},
 	RogueArea{Left: 169, Top: 177, Right: 184, Bottom: 272, Description: "Left from cartref"},
@@ -22,6 +26,10 @@ var rogueAreas = []RogueArea{
 	RogueArea{Left: 198, Top: 95, Right: 209, Bottom: 105, Description: "Top dark"},
 	RogueArea{Left: 84, Top: 170, Right: 108, Bottom: 181, Description: "Top neutrals"},
 	RogueArea{Left: 97, Top: 187, Right: 111, Bottom: 200, Description: "Bottom neutrals"},
+}
+
+var dragonArea = RogueArea{
+	Left: 30, Top: 30, Right: 50, Bottom: 42,
 }
 
 type CacheLocal struct {
@@ -134,7 +142,7 @@ func (s *Sniffer) ProcessRouges(body []byte) {
 			}
 		}
 
-		if isDragon && localCache.ShouldNotify(person.X, person.Y) {
+		if isDragon && !dragonArea.IsInside(person.X, person.Y) && localCache.ShouldNotify(person.X, person.Y) {
 			notifyMsg := fmt.Sprintf("Dragon at at %v:%v", person.X, person.Y)
 
 			/* play() */
